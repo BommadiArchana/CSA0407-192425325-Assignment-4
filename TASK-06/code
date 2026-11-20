@@ -1,0 +1,104 @@
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define TOTAL_REQUESTS 10000
+#define TOTAL_VIDEOS 1000
+#define POPULAR_VIDEOS 100
+
+/* Simulated storage access times in milliseconds */
+#define HDD_READ_TIME 80
+#define SSD_READ_TIME 10
+
+int main(void) {
+    int hddRequests = 0;
+    int ssdRequests = 0;
+    int cacheHits = 0;
+    int cacheMisses = 0;
+
+    double hddTotalTime = 0;
+    double hybridTotalTime = 0;
+
+    srand(42);
+
+    printf("VIDEO STORAGE SIMULATION\n");
+    printf("========================\n");
+
+    for (int i = 0; i < TOTAL_REQUESTS; i++) {
+
+        int video;
+
+        /* 80 percent requests target popular videos */
+        if (rand() % 100 < 80) {
+            video = rand() % POPULAR_VIDEOS;
+        } else {
+            video = POPULAR_VIDEOS +
+                    rand() % (TOTAL_VIDEOS - POPULAR_VIDEOS);
+        }
+
+        /* Design 1: HDD-only storage */
+        hddRequests++;
+        hddTotalTime += HDD_READ_TIME;
+
+        /* Design 2: HDD with SSD cache */
+        if (video < POPULAR_VIDEOS) {
+            cacheHits++;
+            ssdRequests++;
+            hybridTotalTime += SSD_READ_TIME;
+        } else {
+            cacheMisses++;
+            hddRequests++;
+            hybridTotalTime += HDD_READ_TIME;
+        }
+    }
+
+    double hddAverage =
+        hddTotalTime / TOTAL_REQUESTS;
+
+    double hybridAverage =
+        hybridTotalTime / TOTAL_REQUESTS;
+
+    printf("\nTOTAL VIDEO REQUESTS: %d\n",
+           TOTAL_REQUESTS);
+
+    printf("\nDESIGN 1: HDD ONLY\n");
+    printf("------------------\n");
+    printf("Storage: HDD\n");
+    printf("Requests: %d\n", TOTAL_REQUESTS);
+    printf("Average access time: %.2f ms\n",
+           hddAverage);
+    printf("Total access time: %.2f ms\n",
+           hddTotalTime);
+
+    printf("\nDESIGN 2: HDD WITH SSD CACHE\n");
+    printf("----------------------------\n");
+    printf("Storage: HDD + SSD Cache\n");
+    printf("SSD cache hits: %d\n", cacheHits);
+    printf("HDD cache misses: %d\n", cacheMisses);
+    printf("SSD requests: %d\n", ssdRequests);
+    printf("Average access time: %.2f ms\n",
+           hybridAverage);
+    printf("Total access time: %.2f ms\n",
+           hybridTotalTime);
+
+    printf("\nPERFORMANCE COMPARISON\n");
+    printf("----------------------\n");
+
+    printf("HDD-only average: %.2f ms\n",
+           hddAverage);
+
+    printf("Hybrid average: %.2f ms\n",
+           hybridAverage);
+
+    printf("Time saved per request: %.2f ms\n",
+           hddAverage - hybridAverage);
+
+    printf("Improvement: %.2f%%\n",
+           ((hddAverage - hybridAverage) /
+            hddAverage) * 100);
+
+    printf("\nSIMULATION COMPLETED\n");
+
+    return 0;
+}
