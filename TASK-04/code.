@@ -1,0 +1,310 @@
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#define CYLINDERS 200
+#define REQUESTS 10000
+#define HEAD_START 53
+
+typedef struct {
+    int cylinder;
+    int original;
+} Request;
+
+int compare(const void *a, const void *b) {
+    const Request *x = (const Request *)a;
+    const Request *y = (const Request *)b;
+    return x->cylinder - y->cylinder;
+}
+
+void copyRequests(Request dest[], Request src[]) {
+    memcpy(dest, src, sizeof(Request) * REQUESTS);
+}
+
+/* FCFS */
+void fcfs(Request r[], long long *movement,
+          long long *maxWait) {
+    int pos = HEAD_START;
+    long long total = 0, wait = 0, maximum = 0;
+
+    for (int i = 0; i < REQUESTS; i++) {
+        int d = abs(r[i].cylinder - pos);
+        total += d;
+        wait += d;
+
+        if (wait > maximum)
+            maximum = wait;
+
+        pos = r[i].cylinder;
+    }
+
+    *movement = total;
+    *maxWait = maximum;
+}
+
+/* SSTF */
+void sstf(Request r[], long long *movement,
+          long long *maxWait) {
+    int done[REQUESTS] = {0};
+    int pos = HEAD_START;
+    long long total = 0, wait = 0, maximum = 0;
+
+    for (int k = 0; k < REQUESTS; k++) {
+        int best = -1;
+        int distance = CYLINDERS + 1;
+
+        for (int i = 0; i < REQUESTS; i++) {
+            if (!done[i]) {
+                int d = abs(r[i].cylinder - pos);
+
+                if (d < distance) {
+                    distance = d;
+                    best = i;
+                }
+            }
+        }
+
+        done[best] = 1;
+        total += distance;
+        wait += distance;
+
+        if (wait > maximum)
+            maximum = wait;
+
+        pos = r[best].cylinder;
+    }
+
+    *movement = total;
+    *maxWait = maximum;
+}
+
+/* SCAN and LOOK */
+void scanLook(Request r[], long long *movement,
+              long long *maxWait, int look) {
+    Request sorted[REQUESTS];
+    copyRequests(sorted, r);
+
+    qsort(sorted, REQUESTS, sizeof(Request), compare);
+
+    int pos = HEAD_START;
+    int split = 0;
+
+    while (split < REQUESTS &&
+           sorted[split].cylinder < HEAD_START)
+        split++;
+
+    long long total = 0, wait = 0, maximum = 0;
+
+    /* Move towards cylinder 0 first */
+    for (int i = split - 1; i >= 0; i--) {
+        int d = abs(sorted[i].cylinder - pos);
+        total += d;
+        wait += d;
+
+        if (wait > maximum)
+            maximum = wait;
+
+        pos = sorted[i].cylinder;
+    }
+
+    /* SCAN reaches cylinder 0 */
+    if (!look && pos != 0) {
+        int d = pos;
+        total += d;
+        wait += d;
+
+        if (wait > maximum)
+            maximum = wait;
+
+        pos = 0;
+    }
+
+    /* Reverse and service higher requests */
+    for (int i = split; i < REQUESTS; i++) {
+        int d = abs(sorted[i].cylinder - pos);
+        total += d;
+        wait += d;
+
+        if (wait > maximum)
+            maximum = wait;
+
+        pos = sorted[i].cylinder;
+    }
+
+    /* SCAN reaches the last cylinder */
+    if (!look && pos != CYLINDERS - 1) {
+        int d = CYLINDERS - 1 - pos;
+        total += d;
+        wait += d;
+
+        if (wait > maximum)
+            maximum = wait;
+    }
+
+    *movement = total;
+    *maxWait = maximum;
+}
+
+/* C-SCAN and C-LOOK */
+void circularScanLook(Request r[], long long *movement,
+                      long long *maxWait, int look) {
+    Request sorted[REQUESTS];
+    copyRequests(sorted, r);
+
+    qsort(sorted, REQUESTS, sizeof(Request), compare);
+
+    int pos = HEAD_START;
+    int split = 0;
+
+    while (split < REQUESTS &&
+           sorted[split].cylinder < HEAD_START)
+        split++;
+
+    long long total = 0, wait = 0, maximum = 0;
+
+    /* Service requests towards higher cylinders */
+    for (int i = split; i < REQUESTS; i++) {
+        int d = abs(sorted[i].cylinder - pos);
+        total += d;
+        wait += d;
+
+        if (wait > maximum)
+            maximum = wait;
+
+        pos = sorted[i].cylinder;
+    }
+
+    /* Move to the end for C-SCAN */
+    if (!look) {
+        int d = CYLINDERS - 1 - pos;
+        total += d;
+        wait += d;
+
+        if (wait > maximum)
+            maximum = wait;
+
+        pos = CYLINDERS - 1;
+    }
+
+    /* Circular jump to the lowest request */
+    if (split > 0) {
+        int lowest = sorted[0].cylinder;
+        int jump = abs(pos - lowest);
+
+        total += jump;
+        wait += jump;
+
+        if (wait > maximum)
+            maximum = wait;
+
+        pos = lowest;
+
+        for (int i = 0; i < split; i++) {
+            int d = abs(sorted[i].cylinder - pos);
+            total += d;
+            wait += d;
+
+            if (wait > maximum)
+                maximum = wait;
+
+            pos = sorted[i].cylinder;
+        }
+    }
+
+    *movement = total;
+    *maxWait = maximum;
+}
+
+/* Generate workloads */
+void generateRequests(Request r[], int load) {
+    for (int i = 0; i < REQUESTS; i++) {
+        int value;
+
+        if (load == 1) {
+            /* Light: uniform requests */
+            value = rand() % CYLINDERS;
+        }
+        else if (load == 2) {
+            /* Medium: requests spread around the disk */
+            value = (rand() % 100) + 50;
+        }
+        else {
+            /* Heavy: requests concentrated near cylinder 60 */
+            value = 60 + (rand() % 41) - 20;
+        }
+
+        if (value < 0)
+            value = 0;
+        if (value >= CYLINDERS)
+            value = CYLINDERS - 1;
+
+        r[i].cylinder = value;
+        r[i].original = i;
+    }
+}
+
+void runAlgorithm(const char *name, Request r[],
+                  void (*algorithm)(Request *,
+                  long long *, long long *)) {
+    long long movement = 0, maxWait = 0;
+
+    algorithm(r, &movement, &maxWait);
+
+    printf("%-10s %-18.2f %-18lld\n",
+           name,
+           (double)movement / REQUESTS,
+           maxWait);
+}
+
+void runScan(Request r[], long long *m, long long *w) {
+    scanLook(r, m, w, 0);
+}
+
+void runLook(Request r[], long long *m, long long *w) {
+    scanLook(r, m, w, 1);
+}
+
+void runCScan(Request r[], long long *m, long long *w) {
+    circularScanLook(r, m, w, 0);
+}
+
+void runCLook(Request r[], long long *m, long long *w) {
+    circularScanLook(r, m, w, 1);
+}
+
+int main(void) {
+    Request requests[REQUESTS];
+
+    srand((unsigned int)time(NULL));
+
+    const char *loads[] = {
+        "LIGHT LOAD",
+        "MEDIUM LOAD",
+        "HEAVY LOAD"
+    };
+
+    for (int load = 1; load <= 3; load++) {
+        generateRequests(requests, load);
+
+        printf("\n====================================\n");
+        printf("%s - %d REQUESTS\n",
+               loads[load - 1], REQUESTS);
+        printf("====================================\n");
+
+        printf("%-10s %-18s %-18s\n",
+               "Algorithm",
+               "Average Movement",
+               "Maximum Wait");
+
+        runAlgorithm("FCFS", requests, fcfs);
+        runAlgorithm("SSTF", requests, sstf);
+        runAlgorithm("SCAN", requests, runScan);
+        runAlgorithm("C-SCAN", requests, runCScan);
+        runAlgorithm("LOOK", requests, runLook);
+        runAlgorithm("C-LOOK", requests, runCLook);
+    }
+
+    return 0;
+}
